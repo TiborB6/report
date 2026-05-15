@@ -1,0 +1,447 @@
+---
+title: "Financial Report"
+author: "Automated Analysis"
+format: pdf
+jupyter: python3
+params:
+  ticker: "JPM"
+---
+
+```{python}
+#| echo: false
+#| warning: false
+import pandas as pd
+from dotenv import load_dotenv
+import os
+from utils.fetch_data import fetch_financial_data_yfinance, fetch_financial_data
+from utils.load_data import load_stock_data, load_fundamental_data
+from utils.fin.key_metrics import calculate_financial_metrics
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from utils.gemini import query_gemini
+from utils.fin.financial_data import key_figures, key_growth_rates, per_share_values, income_statement_overview, balance_sheet_overview, cashflow_overview
+import json
+
+load_dotenv(".env")
+```
+
+```{python}
+#| echo: false
+#| warning: false
+ticker = "JPM"
+
+stock = load_stock_data("JPM").reset_index().rename(columns={"index": "fiscalDateEnding"})
+balance = load_fundamental_data("JPM", type="balance").reset_index().rename(columns={"index": "fiscalDateEnding"})
+earnings = load_fundamental_data("JPM", type="earnings").reset_index().rename(columns={"index": "fiscalDateEnding"})
+cash = load_fundamental_data("JPM", type="cash").reset_index().rename(columns={"index": "fiscalDateEnding"})
+spy = load_stock_data("SPY").reset_index().rename(columns={"index": "fiscalDateEnding"})
+
+def normalize_datetime_column(df, col='fiscalDateEnding'):
+    df[col] = pd.to_datetime(df[col])
+    if df[col].dt.tz is not None:
+        df[col] = df[col].dt.tz_localize(None)
+    return df
+
+balance = normalize_datetime_column(balance)
+earnings = normalize_datetime_column(earnings)
+cash = normalize_datetime_column(cash)
+stock = normalize_datetime_column(stock)
+with open('JPM_overview.json', 'r', encoding='utf-8') as file:
+    overview = json.load(file)
+
+# Merge step by step
+fundamental = pd.merge(balance, earnings, on='fiscalDateEnding', how='inner')
+fundamental = pd.merge(fundamental, cash, on='fiscalDateEnding', how='inner')
+
+stock_sorted = stock.sort_values('fiscalDateEnding')
+fundamental_sorted = fundamental.sort_values('fiscalDateEnding')
+
+# Merge as-of: for each stock date, take the most recent fundamental row with date <= stock date
+fundamental_stock = pd.merge_asof(fundamental_sorted, stock_sorted, on='fiscalDateEnding', direction='backward')
+```
+
+# Header
+```{python}
+#| echo: false
+#| warning: false
+print(overview[\
+```
+
+# Schlüsseldaten
+```{python}
+#| echo: false
+#| warning: false
+metrics_dict = calculate_financial_metrics(stock, fundamental_stock)
+
+print("| Metric | Value |")
+print("|--------|-------|")
+for key, value in metrics_dict.items():
+    print(f"| {key} | {value} |")
+```
+
+# Aktienkursentwicklung
+```{python}
+#| echo: false
+#| warning: false
+stock['fiscalDateEnding'] = pd.to_datetime(stock['fiscalDateEnding'])
+
+stock = stock[stock['volume'] > 1000]
+
+fig, (ax1, ax2) = plt.subplots(
+    2, 1, figsize=(12, 8),
+    gridspec_kw={'height_ratios': [3, 1]},
+    sharex=True
+)
+
+ax1.plot(stock['fiscalDateEnding'], stock['close'],
+         color='#1f77b4', linewidth=1.5, label='Close Price')
+ax1.set_ylabel('Price ($)', fontsize=11)
+ax1.set_title(f'JPMorgan Chase & Co. (JPM) – Stock Price & Volume',
+              fontsize=14, fontweight='bold')
+ax1.grid(True, linestyle='--', alpha=0.6)
+ax1.legend(loc='upper left')
+
+ax2.bar(stock['fiscalDateEnding'], stock['volume'],
+        width=1, alpha=0.7)
+ax2.set_xlabel('Date', fontsize=11)
+ax2.set_ylabel('Volume', fontsize=11)
+ax2.grid(True, linestyle='--', alpha=0.3, axis='y')
+
+ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+ax2.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+fig.autofmt_xdate(rotation=45)
+
+plt.tight_layout()
+plt.show()
+```
+
+# Highlights
+```{python}
+#| echo: false
+#| warning: false
+print(query_gemini(
+"""
+ Der Umsatz des 4. Quartals 2007 stieg auf $44.1 Milliarden, bei
+Weitem mehr als die erwarteten rund $38.4 Milliarden.
+▫ Nach monatelangen Verhandlungen verkündete die indische
+Tata Motors Ltd am 26. März 2008 die Übernahme der beiden
+Ford Marken Jaguar und Land Rover. Der Verkauf der
+defizitären Luxus Marke Jaguar und der ebenfalls rote Zahlen
+schreibenden Tochter Land Rover soll die Kassen von Ford MC
+mit ungefähr $2.3 Mrd. füllen. Ford sollte es dadurch möglich
+sein, sich auf den wichtigen Massenmarkt zu konzentrieren, um
+so einen Weg aus der Verlustzone zu finden. (Kombinierter
+Verlust von $15,393 Millionen in den Jahren 2006 & 2007)
+▫ Der US Automarkt stellt aufgrund stetiger Marktanteilsverluste
+aktuell das größte Problem für Ford dar. (Fords US Marktanteil
+sank allein im 4. Quartal 2007 um 0.7 Prozentpunkte auf
+14.1%.)
+
+Please generate such a report for JPM. You have freedom what news choose but they should be new not old data.
+Do not give me anything extra in the message on the points of the report, you found online.
+And do not give anything extra in the message just the report.
+Keep the message wording about the same length.
+"""
+))
+```
+
+# Unternehmenüberblick
+```{python}
+#| echo: false
+#| warning: false
+from utils.gemini import query_gemini
+
+print(query_gemini(
+"""
+Die Ford Motor Company (FMC) ist ein global tätiges Unternehmen, mit den
+Kerngeschäftsbereichen Automobile und Finanzdienstleistungen. Das
+Automobilsegment beinhaltet folgende Kernaufgaben: Design, Entwicklung,
+Herstellung, Verkauf und Service von PKWs, LKWs und Ersatzteilen. Die Ford Motor
+Credit Company stellt ein ganzes Portfolio von Finanzdienstleistungen zur
+Verfügung, konzentriert sich dabei jedoch hauptsächlich auf Finanzierung, Leasing
+und Versicherung von Kraftfahrzeugen.
+Ford ist der zweitgrößte Automobil- und Lastkraftwagenhersteller der Welt mit den
+Hauptmarken Aston Martin, Ford, Jaguar, Land Rover, Lincoln, Mercury und Volvo.
+Außerdem ist Ford mit 34% der Mehrheitseigentümer von Mazda. Ungefähr 80% des
+Konzernumsatzes generiert Ford aus dem Verkauf von Automobilen, 2/3 davon in
+Nordamerika. Die restlichen 20% werden mit den Finanzdienstleistungen der Ford
+Motor Credit Company erzielt, hauptsächlich durch die Finanzierung der Ford
+Vertragshändler aber auch durch die Inanspruchnahme verschiedenster
+Finanzservices durch Firmen- und Privatkunden. The Autovermietung Hertz ist
+ebenfalls Bestandteil der FMC. Nach der Gründung im Jahr 1903 fand Fords IPO im
+Jahr 1956 statt.
+Im Jahr 2006 fuhr Ford den größten Jahresverlust ($12.6 Mrd) in der
+Firmengeschichte ein. Trotz eines Gewinns in der Höhe von $750 Millionen im
+zweiten Quartal 2007 schloss die FMC auch das Geschäftsjahr 2007 mit einem
+negativen Ergebnis ab ($2.7 Mrd). Dieser Verlust ist allerdings zum Großteil den
+notwendigen Umstrukturierungen bei Volvo zuzuschreiben. Um die Betriebskosten
+zu reduzieren und die Profitabilität des Unternehmens in Nordamerika zu erhöhen,
+entwickelte die FMC eine langfristige Strategie, die neben einigen weiteren
+Veränderungen die Schließung von 16 Standorten in den USA (bis zum Jahr 2012)
+und die Reduzierung der Betriebskosten um jährlich $5 Mrd. bis 2008 umfasst.
+Weiters werden Verkaufssteigerungen der neueren, bereits am Markt befindlichen
+Modelle (US: Ford Expedition, Edge, Lincoln Navigator, Lincoln; Europa: Ford S-MAX,
+Transit, Galaxy) anvisiert. Zusätzlich werden starke Wachstumsmärkte (Indien,
+China) in Zukunft stärker in den Fokus der FMC rücken.
+MARKTPROFIL. Ford hat weiterhin, sowohl am US-Heimmarkt als auch auf den
+Überseemärkten, mit harter Konkurrenz zu kämpfen. Bis inklusive des 3. Quartals
+2007 musste die FMC Marktanteilsverluste in den USA hinnehmen, hauptsächlich
+aufgrund von Einbrüchen im Flottenvertrieb. Hinzu kommt, dass vor allem
+japanische Unternehmen wie Toyota, Honda oder Nissan in zunehmendem Maße
+auch den US Markt bearbeiten und in der Lage sind, Marktanteile zu gewinnen. Die
+hohen Zugewinne dieser Konkurrenten beruhen u.A. darauf, dass
+kraftstoffsparendere Autos nun auch in den USA gefragt sind und Ford ebenso wie
+z.B. GM bis jetzt diesen Wünschen nur unzureichend nachgekommen ist. Weitere
+Risikobereiche für Ford sind steigende Rohstoffpreise, härterer Preiswettbewerb
+und Wechselkursschwankungen.
+
+Please generate such a report for JPM. You have freedom what news choose but they should be new not old data.
+Do not give me anything extra in the message on the points of the report, you found online.
+And do not give anything extra in the message just the report.
+Keep the message wording about the same length.
+"""
+))
+```
+
+# Nettogewinn
+```{python}
+#| echo: false
+#| warning: false
+start_date = '2015-01-01'
+filtered = earnings[earnings['fiscalDateEnding'] >= start_date]
+
+fig, ax = plt.subplots()
+ax.bar(filtered['fiscalDateEnding'], filtered['netIncome'], width=20)
+plt.show()
+```
+
+# Kennzahlen
+```{python}
+#| echo: false
+#| warning: false
+print(key_figures(fundamental_stock))
+```
+
+# Schlüsselwachstumsraten
+```{python}
+#| echo: false
+#| warning: false
+print(key_figures(fundamental_stock))
+```
+
+# Finanzzahlen
+```{python}
+#| echo: false
+#| warning: false
+print(per_share_values(fundamental_stock))
+print(income_statement_overview(fundamental_stock))
+print(balance_sheet_overview(fundamental_stock))
+print(cashflow_overview(fundamental_stock))
+```
+
+# Ausblick Industrie
+```{python}
+#| echo: false
+#| warning: false
+print(query_gemini(
+"""
+Die Ford Motor Company (FMC) ist ein global tätiges Unternehmen, mit den
+Kerngeschäftsbereichen Automobile und Finanzdienstleistungen. Das
+Automobilsegment beinhaltet folgende Kernaufgaben: Design, Entwicklung,
+Herstellung, Verkauf und Service von PKWs, LKWs und Ersatzteilen. Die Ford Motor
+Credit Company stellt ein ganzes Portfolio von Finanzdienstleistungen zur
+Verfügung, konzentriert sich dabei jedoch hauptsächlich auf Finanzierung, Leasing
+und Versicherung von Kraftfahrzeugen.
+Ford ist der zweitgrößte Automobil- und Lastkraftwagenhersteller der Welt mit den
+Hauptmarken Aston Martin, Ford, Jaguar, Land Rover, Lincoln, Mercury und Volvo.
+Außerdem ist Ford mit 34% der Mehrheitseigentümer von Mazda. Ungefähr 80% des
+Konzernumsatzes generiert Ford aus dem Verkauf von Automobilen, 2/3 davon in
+Nordamerika. Die restlichen 20% werden mit den Finanzdienstleistungen der Ford
+Motor Credit Company erzielt, hauptsächlich durch die Finanzierung der Ford
+Vertragshändler aber auch durch die Inanspruchnahme verschiedenster
+Finanzservices durch Firmen- und Privatkunden. The Autovermietung Hertz ist
+ebenfalls Bestandteil der FMC. Nach der Gründung im Jahr 1903 fand Fords IPO im
+Jahr 1956 statt.
+Im Jahr 2006 fuhr Ford den größten Jahresverlust ($12.6 Mrd) in der
+Firmengeschichte ein. Trotz eines Gewinns in der Höhe von $750 Millionen im
+zweiten Quartal 2007 schloss die FMC auch das Geschäftsjahr 2007 mit einem
+negativen Ergebnis ab ($2.7 Mrd). Dieser Verlust ist allerdings zum Großteil den
+notwendigen Umstrukturierungen bei Volvo zuzuschreiben. Um die Betriebskosten
+zu reduzieren und die Profitabilität des Unternehmens in Nordamerika zu erhöhen,
+entwickelte die FMC eine langfristige Strategie, die neben einigen weiteren
+Veränderungen die Schließung von 16 Standorten in den USA (bis zum Jahr 2012)
+und die Reduzierung der Betriebskosten um jährlich $5 Mrd. bis 2008 umfasst.
+Weiters werden Verkaufssteigerungen der neueren, bereits am Markt befindlichen
+Modelle (US: Ford Expedition, Edge, Lincoln Navigator, Lincoln; Europa: Ford S-MAX,
+Transit, Galaxy) anvisiert. Zusätzlich werden starke Wachstumsmärkte (Indien,
+China) in Zukunft stärker in den Fokus der FMC rücken.
+MARKTPROFIL. Ford hat weiterhin, sowohl am US-Heimmarkt als auch auf den
+Überseemärkten, mit harter Konkurrenz zu kämpfen. Bis inklusive des 3. Quartals
+2007 musste die FMC Marktanteilsverluste in den USA hinnehmen, hauptsächlich
+aufgrund von Einbrüchen im Flottenvertrieb. Hinzu kommt, dass vor allem
+japanische Unternehmen wie Toyota, Honda oder Nissan in zunehmendem Maße
+auch den US Markt bearbeiten und in der Lage sind, Marktanteile zu gewinnen. Die
+hohen Zugewinne dieser Konkurrenten beruhen u.A. darauf, dass
+kraftstoffsparendere Autos nun auch in den USA gefragt sind und Ford ebenso wie
+z.B. GM bis jetzt diesen Wünschen nur unzureichend nachgekommen ist. Weitere
+Risikobereiche für Ford sind steigende Rohstoffpreise, härterer Preiswettbewerb
+und Wechselkursschwankungen.
+
+Please generate such a report for JPM and its industry. You have freedom what infos to choose but they should be new not old data.
+Do not give me anything extra in the message on the points of the report, you found online.
+And do not give anything extra in the message just the report.
+Keep it about the same amount of words.
+"""
+))
+```
+
+# SWOT Analysis
+```{python}
+#| echo: false
+#| warning: false
+print(query_gemini(
+"""
+TRENGHTS. Ford ist einer der größten Autohersteller der
+Welt und weist ein Portfolio mehrerer Marken auf. Fords R&D
+Abteilung konzentriert Ressourcen derzeit auf die
+Verbesserung von Performance und Sicherheit, der
+Treibstoffeffizienz und der Kundenzufriedenheit.
+WEAKNESSES. Obwohl namhafte Konkurrenten längst mit
+umweltschonenden und treibstoffsparenden Autos auf dem
+US-Markt sind, legte Ford auch in den vergangenen Jahren
+sein Hauptaugenmerk vor allem auf SUVs. Durch die
+Preissteigerungen bei Treibstoffen und Energie im
+Allgemeinen könnte die Profitabilität dieses Marktes
+allerdings noch weiter einbrechen.
+OPPORTUNITIES. Präsenz in neuen Märkten: In Indien und
+China rechnet sich Ford starke Wachstumschancen aus.
+THREATS. Härtere Konkurrenten: Toyota, Honda und Nissan
+konnten ihre US Marktanteile ausbauen. Weitere Risiken:
+steigende Kosten für Rohmaterialien, stärkerer
+Preiswettbewerb und ungünstige Wechselkursfluktuationen.
+
+Please generate such a SWOT analysis for JPM. You have freedom what infos to choose but they should be new not old data.
+Do not give me anything extra in the message on the points of the report, you found online.
+And do not give anything extra in the message just the report. Keep it the same length.
+"""
+))
+```
+
+# Aktienperformance
+```{python}
+#| echo: false
+#| warning: false
+stock['normalized'] = stock['close'] / stock['close'].iloc[0] * 100
+spy['normalized'] = spy['close'] / spy['close'].iloc[0] * 100
+
+fig, ax1 = plt.subplots()
+
+ax1.plot(stock['fiscalDateEnding'], stock['normalized'],
+         color='#1f77b4', linewidth=1.5, label='JPM')
+ax1.plot(spy['fiscalDateEnding'], spy['normalized'],
+         color='#ff7f0e', linewidth=1.5, label='SPY')
+
+ax1.set_ylabel('Normalized Price (start = 100)', fontsize=11)
+ax1.set_title('5 year performance: JPMorgan Chase & Co. (JPM) vs. S&P 500 (SPY) ',
+              fontsize=14, fontweight='bold')
+ax1.grid(True, linestyle='--', alpha=0.6)
+ax1.legend(loc='upper left')
+
+fig.autofmt_xdate(rotation=45)
+plt.tight_layout()
+plt.show()
+```
+
+# Unternehmens News
+```{python}
+#| echo: false
+#| warning: false
+print(query_gemini(
+"""
+January 4, 2008
+Toyota overtakes Ford in US
+Toyota overtook Ford Motor last year as the number two
+carmaker in the US, shattering Detroit's long dominance
+of the world's biggest vehicle market. The Japanese
+carmaker sold 2.62m vehicles in the US in 2007, up 2.7
+per cent from the previous year. Ford's sales slumped 12
+per cent to 2.57m units.
+January 8, 2008
+Ford to Invest $500 Million to Boost Production
+Capacity in India
+Ford Motor Co., furthering its push into emerging
+markets, plans to invest $500 million to double its
+production capacity in India and start making a small,
+inexpensive car for the country's growing middle class.
+Ford said during the next two years it will raise annual
+capacity at its plants in the southern state of Tamil Nadu
+to 250,000 engines and 200,000 cars from the current
+50,000 engines and 100,000 cars.
+January 13, 2008
+Ford Unveils Small Car to Meet Fuel-Economy Demand
+Ford unveiled its second small-car prototype, trying to
+tap demand for more fuel-efficient vehicles. The fourdoor Verve sedan is smaller than the Focus, Ford's main
+small car. Ford plans to start sales by 2010 on a North
+American version of the Verve, based on the model
+displayed today at the Detroit auto show.
+January 24, 2008
+Ford to offer buyouts to 54,000 workers
+Ford Motor Co. will offer buyout and early retirement
+packages to 54,000 U.S. hourly workers in an effort to cut
+costs and replace those leaving with lower-paid workers.
+Thursday's announcement came as Ford said it narrowed
+its losses in 2007 but warned that the outlook for U.S.
+sales in 2008 remains grim.
+February 1, 2008
+Ford, Toyota Say January U.S. Sales Fell; GM Gains.
+Ford Motor Co., Chrysler LLC and most Asian
+automakers said U.S. sales fell in January, setting the
+industry on a course for its third straight year of
+decline. Ford reported a 3.9 percent drop in light
+vehicles. Toyota Motor Corp., the Japanese
+automaker that passed Ford to become second in
+the U.S. last year, slid along with Honda Motor Co.
+and Nissan Motor Co. No. 1 General Motors Corp.
+posted a surprise gain and scaled back planned
+production cuts.
+March 3, 2008
+GM, Ford, Toyota Post Declines in U.S. February
+Sales. General Motors Corp., Ford Motor Co.,
+Chrysler LLC and Toyota Motor Corp. said sales fell
+in February as rising fuel prices and a slowing
+economy dragged the industry to its steepest
+decline in seven months. GM's light-vehicle sales
+dropped 12.9 percent, Ford's slipped 6.6 percent
+and Chrysler was down 14 percent
+March 28, 2008
+Tata pledge on Jaguar and Land Rover. Tata, whose
+automotive division is negotiating to buy Jaguar and
+Land Rover from Ford Motor, has no plans to
+"Indianise" the UK carmakers, its chairman said
+yesterday. Tata gave clearest indications yet that his
+group will retain the brands' British character and
+leave their management largely intact after buying
+them from Ford later this year.
+March 28, 2008
+EU inquiry deadline into Tata Motors. The European
+Commission said the deadline for its inquiry into
+Indian car maker Tata Motors Ltd's proposed $2.3b
+acquisition of Ford Motor Co's Jaguar and Land
+Rover brands is set for April 30
+
+Please generate such a news reprt for JPM. You have freedom what news to choose but they should be new not old data and important.
+Do not give me anything extra in the message on the points of the report, you found online.
+And do not give anything extra in the message just the report.
+Keep the overall message, wording and the amount of news +-1 the same length.
+"""
+))
+```
+
+# Disclosure
+
+The fundamental data and overview data is pulled from alphavantage and the stock data is from yfinance.
+Such a report can be generated for any S&P 500 company can be automatically generated under ...
+The github repo, all calculations and how the report is generated can be found here: https://github.com/TiborB6/report
+
+For this report the datapoints are automatically calculated, but the texts from gemini are corrected.
+The buying decision is based on the DDM model compared to the risk free rate.
