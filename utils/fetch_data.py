@@ -77,7 +77,7 @@ def fetch_financial_data(symbol, api_key='demo'):
 
         # Sleep between calls (10 seconds) except after the last one
         if idx != len(endpoint_items) - 1:
-            time.sleep(10)
+            time.sleep(2)
 
     return saved_files
 
@@ -113,9 +113,14 @@ def fetch_financial_data_yfinance(symbol, period='5y'):
 
     return saved_files
 
-def remove_json_files(directory_path="."):
+def cleanup(directory_path="."):
     """
-    Delete every .json file in the specified directory using os.listdir.
+    Delete the following files in the specified directory:
+    - .json
+    - .tex
+    - .log
+    - .aux
+    - .pdf files that are NOT named 'report.pdf'
     """
     if not os.path.isdir(directory_path):
         raise ValueError(f"Directory not found: {directory_path}")
@@ -124,7 +129,15 @@ def remove_json_files(directory_path="."):
     errors = 0
 
     for filename in os.listdir(directory_path):
-        if filename.endswith(".json"):
+        # Determine if the file should be removed
+        should_remove = False
+
+        if filename.endswith((".json", ".tex", ".log", ".aux")):
+            should_remove = True
+        elif filename.endswith(".pdf") and filename != "report.pdf":
+            should_remove = True
+
+        if should_remove:
             file_path = os.path.join(directory_path, filename)
             try:
                 os.remove(file_path)
