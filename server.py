@@ -6,7 +6,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def form():
-    return render_template('form.html')
+    return render_template('home.html')
 
 @app.route('/generate_report', methods=['POST'])
 def generate_report():

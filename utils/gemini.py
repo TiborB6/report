@@ -3,7 +3,7 @@ from google.genai import types
 
 def query_gemini(
     prompt: str,
-    model_name: str = "gemini-2.5-flash",
+    model_name: str = "gemini-2.0-flash",
     enable_web_search: bool = True
 ) -> str:
     """
@@ -33,5 +33,4 @@ def query_gemini(
         config=config,
     )
 
-    # Return only the response text
     return response.text

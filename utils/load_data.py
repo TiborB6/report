@@ -82,29 +82,17 @@ def load_fundamental_data(symbol, path=".", type="balance"):
 
 def load_overview_data(symbol, path=".", type="overview"):
     """
-    Load fundamental data (balance sheet, income statement, or cash flow) for a symbol.
+    Load OVERVIEW data for a symbol from a JSON file and return as a dictionary.
 
     Parameters:
-    - symbol: stock ticker (e.g., "JPM")
+    - symbol: stock ticker (e.g., "BAC")
     - path: directory containing the JSON file
-    - type: type of fundamental data (e.g., "balance", "income", "cashflow")
+    - type: should be "overview" (default)
 
     Returns:
-    - DataFrame with fiscal year as index and metrics as columns
+    - dict: The entire JSON object as a Python dictionary.
     """
     file_path = os.path.join(path, f"{symbol}_{type}.json")
-
     with open(file_path, "r") as f:
-        data = json.load(f)
-
-    df = pd.DataFrame(data)
-
-    df.set_index("fiscalDateEnding", inplace=True)
-    df.sort_index(inplace=True)
-
-    for col in df.columns:
-        if col == "reportedCurrency":
-            continue
-        df[col] = pd.to_numeric(df[col], errors='coerce')   # <-- fixed
-
-    return df
+        data = json.load(f)   # data is a dict with keys like "Symbol", "Name", ...
+    return data

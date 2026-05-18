@@ -1,18 +1,18 @@
 import pandas as pd
 
-def key_figures(fundamental_stock):
+def key_figures(fundamental_stock, n=5):
     df = fundamental_stock.copy()   # work on a copy
     df['EPS'] = df['netIncome_x'] / df['commonStockSharesOutstanding']
     df['FCF'] = df['operatingCashflow'] - df['capitalExpenditures']
     df['FCFPS'] = df['FCF'] / df['commonStockSharesOutstanding']
-    df['KGV'] = df['close'] / df['EPS']
+    df['PE_Ratio'] = df['close'] / df['EPS']
     df['year'] = df['fiscalDateEnding'].dt.year
     df = df.sort_values('fiscalDateEnding')
     first_per_year = df.groupby('year').first().reset_index()
-    last5_years = sorted(first_per_year['year'].unique())[-5:]
-    metrics = ['close', 'EPS', 'KGV', 'FCFPS']
+    last5_years = sorted(first_per_year['year'].unique())[-n:]
+    metrics = ['close', 'EPS', 'PE_Ratio', 'FCFPS']
     wide_df = first_per_year[first_per_year['year'].isin(last5_years)].set_index('year')[metrics].T
-    return wide_df
+    return wide_df.round(2)
 
 
 def key_growth_rates(fundamental_stock):
@@ -23,7 +23,7 @@ def key_growth_rates(fundamental_stock):
     df['EPS'] = df['netIncome_x'] / df['commonStockSharesOutstanding']
     df['FCF'] = df['operatingCashflow'] - df['capitalExpenditures']
     df['FCFPS'] = df['FCF'] / df['commonStockSharesOutstanding']
-    df['KGV'] = df['close'] / df['EPS']  # P/E ratio
+    df['PE_Ratio'] = df['close'] / df['EPS']  # P/E ratio
 
     # ---- 2. Add year and select one row per fiscal year (first report) ----
     df['year'] = df['fiscalDateEnding'].dt.year
@@ -40,12 +40,12 @@ def key_growth_rates(fundamental_stock):
         # No dividend data available – we will still create the column with None
         yearly['DividendsPerShare'] = None
 
-    # Metrics to include in growth table
+    # Metrics to include in growth table (English keys)
     metrics = {
-        'Konzernumsatz': 'totalRevenue',
-        'Konzernergebnis': 'netIncome_x',
-        'Gewinn je Aktie': 'EPS',
-        'Dividenden': 'DividendsPerShare'
+        'Revenue': 'totalRevenue',
+        'Net Income': 'netIncome_x',
+        'EPS': 'EPS',
+        'Dividends': 'DividendsPerShare'
     }
 
     # ---- 4. Pivot: years as columns, metrics as rows ----
@@ -62,10 +62,10 @@ def key_growth_rates(fundamental_stock):
     latest = years_sorted[-1]
 
     periods = {
-        '1 Jahr': latest - 1,
-        '3 Jahren': latest - 3,
-        '5 Jahren': latest - 5,
-        '8 Jahren': latest - 8
+        '1 Year': latest - 1,
+        '3 Years': latest - 3,
+        '5 Years': latest - 5,
+        '8 Years': latest - 8
     }
 
     growth_df = pd.DataFrame(index=pivoted.index, columns=periods.keys())
@@ -85,7 +85,7 @@ def key_growth_rates(fundamental_stock):
             else:
                 growth_df.loc[metric, period_label] = None
 
-    return growth_df
+    return growth_df.round(2)
 
 
 def per_share_values(fundamental_stock):
@@ -95,23 +95,23 @@ def per_share_values(fundamental_stock):
     df['EPS'] = df['netIncome_x'] / df['commonStockSharesOutstanding']
     df['FCF'] = df['operatingCashflow'] - df['capitalExpenditures']
 
-    # Per‑share metrics
-    df['Gewinn je Aktie'] = df['EPS']
-    df['Free Cashflow je Aktie'] = df['FCF'] / df['commonStockSharesOutstanding']
+    # Per‑share metrics (English column names)
+    df['Earnings Per Share'] = df['EPS']
+    df['Free Cash Flow Per Share'] = df['FCF'] / df['commonStockSharesOutstanding']
 
-    # Dividende je Aktie: use total dividends paid (either column)
+    # Dividends Per Share: use total dividends paid (either column)
     if 'dividendPayout' in df.columns:
         total_div = df['dividendPayout']
     elif 'dividendPayoutCommonStock' in df.columns:
         total_div = df['dividendPayoutCommonStock']
     else:
         total_div = 0
-    df['Dividende je Aktie'] = total_div / df['commonStockSharesOutstanding']
+    df['Dividends Per Share'] = total_div / df['commonStockSharesOutstanding']
 
-    df['Ausstehende Aktien (Mio)'] = df['commonStockSharesOutstanding'] / 1_000_000
-    df['Buchwert je Aktie'] = df['totalShareholderEquity'] / df['commonStockSharesOutstanding']
-    df['Cashflow je Aktie'] = df['operatingCashflow'] / df['commonStockSharesOutstanding']
-    df['Konzernumsatz je Aktie'] = df['totalRevenue'] / df['commonStockSharesOutstanding']
+    df['Shares Outstanding (M)'] = df['commonStockSharesOutstanding'] / 1_000_000
+    df['Book Value Per Share'] = df['totalShareholderEquity'] / df['commonStockSharesOutstanding']
+    df['Cash Flow Per Share'] = df['operatingCashflow'] / df['commonStockSharesOutstanding']
+    df['Revenue Per Share'] = df['totalRevenue'] / df['commonStockSharesOutstanding']
 
     # Annual aggregation: first report per fiscal year
     df['year'] = df['fiscalDateEnding'].dt.year
@@ -122,39 +122,38 @@ def per_share_values(fundamental_stock):
     last5_years = sorted(first_per_year['year'].unique())[-5:]
 
     metrics = [
-        'Gewinn je Aktie',
-        'Dividende je Aktie',
-        'Ausstehende Aktien (Mio)',
-        'Buchwert je Aktie',
-        'Cashflow je Aktie',
-        'Free Cashflow je Aktie',
-        'Konzernumsatz je Aktie'
+        'Earnings Per Share',
+        'Dividends Per Share',
+        'Shares Outstanding (M)',
+        'Book Value Per Share',
+        'Cash Flow Per Share',
+        'Free Cash Flow Per Share',
+        'Revenue Per Share'
     ]
 
     # Pivot: years as columns, metrics as rows
     wide_df = first_per_year[first_per_year['year'].isin(last5_years)].set_index('year')[metrics].T
-    return wide_df
+    return wide_df.round(2)
 
 
 def income_statement_overview(fundamental_stock):
     """
     Returns a DataFrame with:
-        Operativer Konzernumsatz,
-        Operatives Betriebsergebnis,
-        Zinserträge (-aufwände),
-        Ergebnis vor Steuern,
-        Ergebnis nach Steuern,
-        Konzernergebnis
+        Operating Revenue,
+        Operating Income,
+        Interest Income (Expense),
+        Income Before Tax,
+        Income After Tax,
+        Net Income
     in million USD, rows = metrics, columns = years (last 5 years).
     """
     df = fundamental_stock.copy()
-
-    # Annual aggregation (first report per fiscal year)
+    df['fiscalDateEnding'] = pd.to_datetime(df['fiscalDateEnding'])
     df['year'] = df['fiscalDateEnding'].dt.year
     df = df.sort_values('fiscalDateEnding')
     yearly = df.groupby('year').first().reset_index()
 
-    # Compute interest result (if netInterestIncome not available, use interestIncome - interestExpense)
+    # Compute interest result
     if 'netInterestIncome' in yearly.columns and yearly['netInterestIncome'].notna().any():
         interest_result = yearly['netInterestIncome']
     elif 'interestIncome' in yearly.columns and 'interestExpense' in yearly.columns:
@@ -162,97 +161,128 @@ def income_statement_overview(fundamental_stock):
     else:
         interest_result = None
 
-    # Define metrics and their source columns (values in millions, so divide by 1e6 if needed)
-    # Note: All source columns are already in dollars, so we convert to millions.
-    metrics = {
-        'Operativer Konzernumsatz': yearly['totalRevenue'] / 1_000_000,
-        'Operatives Betriebsergebnis': yearly['operatingIncome'] / 1_000_000,
-        'Zinserträge (-aufwände)': interest_result / 1_000_000 if interest_result is not None else None,
-        'Ergebnis vor Steuern': yearly['incomeBeforeTax'] / 1_000_000,
-        'Ergebnis nach Steuern': yearly.get('netIncomeFromContinuingOperations', yearly['netIncome_x']) / 1_000_000,
-        'Konzernergebnis': yearly['netIncome_x'] / 1_000_000
-    }
+    metrics = {}
+    if 'totalRevenue' in yearly.columns:
+        metrics['Operating Revenue'] = yearly['totalRevenue'] / 1_000_000
+    if 'operatingIncome' in yearly.columns:
+        metrics['Operating Income'] = yearly['operatingIncome'] / 1_000_000
+    if interest_result is not None:
+        metrics['Interest Income (Expense)'] = interest_result / 1_000_000
+    if 'incomeBeforeTax' in yearly.columns:
+        metrics['Income Before Tax'] = yearly['incomeBeforeTax'] / 1_000_000
+    if 'netIncomeFromContinuingOperations' in yearly.columns:
+        metrics['Income After Tax'] = yearly['netIncomeFromContinuingOperations'] / 1_000_000
+    elif 'netIncome_x' in yearly.columns:
+        metrics['Income After Tax'] = yearly['netIncome_x'] / 1_000_000
+    if 'netIncome_x' in yearly.columns:
+        metrics['Net Income'] = yearly['netIncome_x'] / 1_000_000
+    elif 'netIncome' in yearly.columns:
+        metrics['Net Income'] = yearly['netIncome'] / 1_000_000
 
-    # Build DataFrame: rows = metrics, columns = years
-    result = pd.DataFrame({name: series for name, series in metrics.items() if series is not None}).T
-    # Keep only last 5 years
+    if not metrics:
+        return pd.DataFrame()
+
+    result = pd.DataFrame(metrics).T
+    # Assign actual years as column names
+    result.columns = yearly['year'].values
+    # Keep only last 5 years (or fewer if not available)
     years_sorted = sorted(yearly['year'].unique())
     last5_years = years_sorted[-5:]
     result = result[[col for col in result.columns if col in last5_years]]
-    return result
+    return result.round(2)
 
 
 def balance_sheet_overview(fundamental_stock):
     """
     Returns a DataFrame with:
-        Barmittel,
-        Summe Aktiva,
-        Langfristige Verbindlichkeiten,
-        Summe Passiva,
-        Eigenkapital
+        Cash,
+        Total Assets,
+        Long-Term Liabilities,
+        Total Liabilities,
+        Equity
     in million USD, rows = metrics, columns = years (last 5 years).
     """
     df = fundamental_stock.copy()
-
+    df['fiscalDateEnding'] = pd.to_datetime(df['fiscalDateEnding'])
     df['year'] = df['fiscalDateEnding'].dt.year
     df = df.sort_values('fiscalDateEnding')
     yearly = df.groupby('year').first().reset_index()
 
-    # Use totalNonCurrentLiabilities for "Langfristige Verbindlichkeiten" (long‑term liabilities)
+    # Ensure long-term liabilities exist
     if 'totalNonCurrentLiabilities' not in yearly.columns:
-        # Fallback: totalLiabilities - totalCurrentLiabilities
-        yearly['totalNonCurrentLiabilities'] = yearly['totalLiabilities'] - yearly['totalCurrentLiabilities']
+        if 'totalLiabilities' in yearly.columns and 'totalCurrentLiabilities' in yearly.columns:
+            yearly['totalNonCurrentLiabilities'] = yearly['totalLiabilities'] - yearly['totalCurrentLiabilities']
 
-    metrics = {
-        'Barmittel': yearly['cashAndCashEquivalentsAtCarryingValue'] / 1_000_000,
-        'Summe Aktiva': yearly['totalAssets'] / 1_000_000,
-        'Langfristige Verbindlichkeiten': yearly['totalNonCurrentLiabilities'] / 1_000_000,
-        'Summe Passiva': yearly['totalLiabilities'] / 1_000_000,
-        'Eigenkapital': yearly['totalShareholderEquity'] / 1_000_000
-    }
+    metrics = {}
+    if 'cashAndCashEquivalentsAtCarryingValue' in yearly.columns:
+        metrics['Cash'] = yearly['cashAndCashEquivalentsAtCarryingValue'] / 1_000_000
+    if 'totalAssets' in yearly.columns:
+        metrics['Total Assets'] = yearly['totalAssets'] / 1_000_000
+    if 'totalNonCurrentLiabilities' in yearly.columns:
+        metrics['Long-Term Liabilities'] = yearly['totalNonCurrentLiabilities'] / 1_000_000
+    if 'totalLiabilities' in yearly.columns:
+        metrics['Total Liabilities'] = yearly['totalLiabilities'] / 1_000_000
+    if 'totalShareholderEquity' in yearly.columns:
+        metrics['Equity'] = yearly['totalShareholderEquity'] / 1_000_000
+
+    if not metrics:
+        return pd.DataFrame()
 
     result = pd.DataFrame(metrics).T
+    result.columns = yearly['year'].values
     years_sorted = sorted(yearly['year'].unique())
     last5_years = years_sorted[-5:]
     result = result[[col for col in result.columns if col in last5_years]]
-    return result
+    return result.round(2)
 
 
 def cashflow_overview(fundamental_stock):
     """
     Returns a DataFrame with:
-        Abschreibungen,
-        CF Betriebliche Tätigkeit,
-        Investitionsaufwand,
-        CF Investitionstätigkeit,
-        CF Finanzierungstätigkeit,
-        Veränderung flüssige Mittel
+        Depreciation,
+        Cash Flow from Operations,
+        Capital Expenditures (Investment),
+        Cash Flow from Investing,
+        Cash Flow from Financing,
+        Change in Cash
     in million USD, rows = metrics, columns = years (last 5 years).
     """
     df = fundamental_stock.copy()
-
+    df['fiscalDateEnding'] = pd.to_datetime(df['fiscalDateEnding'])
     df['year'] = df['fiscalDateEnding'].dt.year
     df = df.sort_values('fiscalDateEnding')
     yearly = df.groupby('year').first().reset_index()
 
-    # Investitionsaufwand is typically negative (cash outflow). We use -capitalExpenditures to match the sample.
-    # If capitalExpenditures is already negative, adjust accordingly.
-    # In your data, capitalExpenditures is likely positive (outlay), so we take negative.
-    investment_spending = -yearly['capitalExpenditures'] if 'capitalExpenditures' in yearly.columns else None
+    # Capital Expenditures = -capitalExpenditures (outflow negative)
+    investment_spending = None
+    if 'capitalExpenditures' in yearly.columns:
+        investment_spending = -yearly['capitalExpenditures']
 
-    metrics = {
-        'Abschreibungen': yearly['depreciationDepletionAndAmortization'] / 1_000_000,
-        'CF Betriebliche Tätigkeit': yearly['operatingCashflow'] / 1_000_000,
-        'Investitionsaufwand': investment_spending / 1_000_000 if investment_spending is not None else None,
-        'CF Investitionstätigkeit': yearly['cashflowFromInvestment'] / 1_000_000,
-        'CF Finanzierungstätigkeit': yearly['cashflowFromFinancing'] / 1_000_000,
-        'Veränderung flüssige Mittel': yearly.get('changeInCashAndCashEquivalents',
-                                                  yearly['cashAndCashEquivalentsAtCarryingValue'].diff()) / 1_000_000
-    }
+    metrics = {}
+    if 'depreciationDepletionAndAmortization' in yearly.columns:
+        metrics['Depreciation'] = yearly['depreciationDepletionAndAmortization'] / 1_000_000
+    if 'operatingCashflow' in yearly.columns:
+        metrics['Cash Flow from Operations'] = yearly['operatingCashflow'] / 1_000_000
+    if investment_spending is not None:
+        metrics['Capital Expenditures (Investment)'] = investment_spending / 1_000_000
+    if 'cashflowFromInvestment' in yearly.columns:
+        metrics['Cash Flow from Investing'] = yearly['cashflowFromInvestment'] / 1_000_000
+    if 'cashflowFromFinancing' in yearly.columns:
+        metrics['Cash Flow from Financing'] = yearly['cashflowFromFinancing'] / 1_000_000
 
-    # Remove any metric that could not be computed
-    result = pd.DataFrame({name: series for name, series in metrics.items() if series is not None}).T
+    # Change in Cash
+    if 'changeInCashAndCashEquivalents' in yearly.columns:
+        metrics['Change in Cash'] = yearly['changeInCashAndCashEquivalents'] / 1_000_000
+    elif 'cashAndCashEquivalentsAtCarryingValue' in yearly.columns:
+        change = yearly['cashAndCashEquivalentsAtCarryingValue'].diff()
+        metrics['Change in Cash'] = change / 1_000_000
+
+    if not metrics:
+        return pd.DataFrame()
+
+    result = pd.DataFrame(metrics).T
+    result.columns = yearly['year'].values
     years_sorted = sorted(yearly['year'].unique())
     last5_years = years_sorted[-5:]
     result = result[[col for col in result.columns if col in last5_years]]
-    return result
+    return result.round(2)
