@@ -14,33 +14,40 @@ from utils.competitors import get_competitors
 from utils.news import get_latest_news
 import subprocess
 import time
-from utils.latex import LatexTable, format_address
+from utils.latex import LatexTable, format_address, latex_escape
+import argparse
+
 
 load_dotenv(".env")
 
 # ------------------- Get ticker from command line -------------------
-if len(sys.argv) != 2:
-    print("Usage: python script.py <TICKER>")
-    sys.exit(1)
+parser = argparse.ArgumentParser()
+parser.add_argument("ticker", help="Stock ticker symbol")
+parser.add_argument("-l", "--local", action="store_true", help="Set local mode")
+parser.add_argument("-c", "--clean", action="store_true", help="Set clean mode")
+args = parser.parse_args()
 
-TICKER = sys.argv[1].upper()
-BENCHMARK = "SPY"          # can be made a second parameter if desired
+TICKER = args.ticker.upper()
+BENCHMARK = "SPY"
+local = args.local
+clean = args.clean
 
 # ------------------- Data fetching ---------------------------------
 competitors = get_competitors(TICKER, use_top_n=5)
-for competitor in competitors:
-    fetch_and_save_single_endpoint(
-        symbol=competitor,
-        endpoint_name='overview',
-        endpoint_params={'function': 'OVERVIEW', 'file_suffix': 'overview', 'full_history': False},
-        api_key=os.getenv("API_KEY")
-    )
+if not local:
+    for competitor in competitors:
+        fetch_and_save_single_endpoint(
+            symbol=competitor,
+            endpoint_name='overview',
+            endpoint_params={'function': 'OVERVIEW', 'file_suffix': 'overview', 'full_history': False},
+            api_key=os.getenv("API_KEY")
+        )
 
-    time.sleep(2)
+        time.sleep(2)
 
-fetch_financial_data(TICKER)
-fetch_financial_data_yfinance(TICKER)
-fetch_financial_data_yfinance(BENCHMARK)
+    fetch_financial_data(TICKER, api_key=os.getenv("API_KEY"))
+    fetch_financial_data_yfinance(TICKER)
+    fetch_financial_data_yfinance(BENCHMARK)
 
 # ------------------- Data loading (parameterized) -------------------
 overview_data_list = []
@@ -48,7 +55,9 @@ for competitor in competitors:
     data = load_overview_data(competitor)
     overview_data_list.append(data)
 
-fetch_financial_data_yfinance(overview_data_list[0]['Symbol'])
+if not local:
+    if overview_data_list:
+        fetch_financial_data_yfinance(overview_data_list[0]['Symbol'])
 
 stock = load_stock_data(TICKER).reset_index().rename(columns={"index": "fiscalDateEnding"})
 balance = load_fundamental_data(TICKER, type="balance").reset_index().rename(columns={"index": "fiscalDateEnding"})
@@ -56,7 +65,10 @@ earnings = load_fundamental_data(TICKER, type="earnings").reset_index().rename(c
 cash = load_fundamental_data(TICKER, type="cash").reset_index().rename(columns={"index": "fiscalDateEnding"})
 spy = load_stock_data(BENCHMARK).reset_index().rename(columns={"index": "fiscalDateEnding"})
 overview = load_overview_data(TICKER)
-competitor_stock = load_stock_data(overview_data_list[0]['Symbol']).reset_index().rename(columns={"index": "fiscalDateEnding"})
+
+competitor_stock = pd.DataFrame()
+if overview_data_list:
+    competitor_stock = load_stock_data(overview_data_list[0]['Symbol']).reset_index().rename(columns={"index": "fiscalDateEnding"})
 
 def normalize_datetime_column(df, col='fiscalDateEnding'):
     df[col] = pd.to_datetime(df[col])
@@ -129,13 +141,13 @@ tex_print(r"\textbf{Industry:} " + overview['Industry'].lower())
 tex_print(r"\end{minipage}")
 tex_print(r"\vspace{0.5cm}")
 tex_print(r"\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}} l l l l @{}}")
-tex_print(r"\textbf{Empfehlung} & \textbf{Kurs} & \textbf{12-Monats Ziel Kurs} & \textbf{Investment Style} \\")
+tex_print(r"\textbf{Recommendation} & \textbf{Price} & \textbf{12-Month Target Price} & \textbf{Investment Style} \\")
 tex_print(f"{ddm['evaluation']} & \\${stock.iloc[-1]['close']:.2f} & \\${ddm['target_price']:.2f} & {overview['AssetType']} \\\\")
 tex_print(r"\end{tabular*}")
 tex_print(fr"{overview['Description']}")
 
-# ------------------- Schlüsseldaten -------------------
-tex_print(r"\section*{Schlüsseldaten}")
+# ------------------- Key Metrics -------------------
+tex_print(r"\section*{Key Metrics}")
 metrics_dict = calculate_financial_metrics(stock, fundamental_stock)
 metrics_dict['Beta'] = overview['Beta']
 items = list(metrics_dict.items())
@@ -164,7 +176,7 @@ for key, value in col3_items:
 tex_print(r"\end{minipage}")
 tex_print(r"\vspace{0.5cm}")
 
-# ------------------- Aktienkursentwicklung (figure) -------------------
+# ------------------- Stock price development (figure) -------------------
 stock['fiscalDateEnding'] = pd.to_datetime(stock['fiscalDateEnding'])
 stock = stock[stock['volume'] > 1000]
 
@@ -188,7 +200,7 @@ price_vol_pdf = f"{TICKER.lower()}_price_volume.pdf"
 plt.savefig(price_vol_pdf, bbox_inches='tight')
 plt.close()
 
-tex_print(r"\section*{Aktienkursentwicklung}")
+tex_print(r"\section*{Stock Price Development}")
 tex_print(r"\begin{figure}[!htb]")
 tex_print(r"\centering")
 tex_print(f"\\includegraphics[width=\\linewidth]{{{price_vol_pdf}}}")
@@ -214,19 +226,21 @@ aktuell das größte Problem für Ford dar. (Fords US Marktanteil
 sank allein im 4. Quartal 2007 um 0.7 Prozentpunkte auf
 14.1%.)
 
-Please generate such a report for JPM. You have freedom what news choose but they should be new not old data.
-Do not give me anything extra in the message on the points of the report, you found online.
-And do not give anything extra in the message just the report. keep it the same length.
+Write company highlights like this in English for {TICKER}.
+Use recent data (not older than 3 months). Format each bullet point with "▫" at the beginning.
+Keep the total length similar to the example below (approx. 75 words).
+Do not add any extra commentary or meta-instructions – only output the bullet points.
 """
 highlights_text = query_gemini(highlights_prompt)
-tex_print(highlights_text.replace('\n', ' '))
+tex_print(latex_escape(highlights_text).replace('\n', '\\\\'))
 tex_print(r"\end{minipage}")
+tex_print(r"\hfill")
 
-# ------------------- Risikoeinschätzung -------------------
+# ------------------- Risk Assessment -------------------
 tex_print(r"\begin{minipage}[t]{0.48\textwidth}")
-tex_print(r"\section*{Risikoeinschätzung}")
-highlights_prompt = f"""
-Angesichts der aktuellen wirtschaftlichen 
+tex_print(r"\section*{Risk Assessment}")
+risk_prompt = f"""
+ngesichts der aktuellen wirtschaftlichen 
 Lage in den USA lässt sich feststellen, dass 
 die Aufgabe, Ford MC zu reorganisieren 
 und zu restrukturieren, sicher nicht 
@@ -238,41 +252,43 @@ die immer noch bestehende Möglichkeit
 einer Rezession führten bereits zu 
 schwächeren US Verkaufszahlen (-4.1%)
 im Januar 08.
-Die Risikoeinschätzung lautet: HIGH
+Based on this the risk assesment is: HIGH.
 
-Please generate such a report for JPM. You have freedom what news choose but they should be new not old data.
-Do not give me anything extra in the message on the points of the report, you found online.
-And do not give anything extra in the message just the report. keep it the same length.
+Write a risk assesment like this in English for {TICKER}.
+Include 2-3 key risks and conclude with a risk level: LOW, MEDIUM, or HIGH.
+Keep the text length similar to the example (approx. 75 words).
+Do not add any extra commentary or meta-instructions
 """
-highlights_text = query_gemini(highlights_prompt)
-tex_print(highlights_text.replace('\n', ' '))
+risk_text = query_gemini(risk_prompt)
+tex_print(latex_escape(risk_text).replace('\n', '\\\\'))
 tex_print(r"\end{minipage}")
 tex_print(r"\newpage")
 
 # ------------------- DDM -------------------
 tex_print(r"\begin{minipage}[t]{0.60\textwidth}")
 tex_print(r"\section*{Dividend Discount Model}")
-ddm_table, terminal_value = get_ddm_table("JPM", forecast_years=3)
+ddm_table, terminal_value = get_ddm_table(TICKER, forecast_years=3)
 tex_print(LatexTable(ddm_table.to_latex()).fit_to_width())
 tex_print(r"\vspace{0.2cm}")
 tex_print(f"\\textbf{{Terminal Value}}: {terminal_value:.2f}\\\\")
 tex_print(r"\end{minipage}")
+tex_print(r"\hfill")
 
-# ------------------- Firmeninformationen -------------------
-tex_print(r"\begin{minipage}[t]{0.30\textwidth}")
-tex_print(r"\section*{Firmeninformationen}")
+# ------------------- Company Information -------------------
+tex_print(r"\begin{minipage}[t]{0.44\textwidth}")
+tex_print(r"\section*{Company Information}")
 formatted_address = format_address(overview['Address'])
 tex_print(r"\begin{description}")
-tex_print(r"    \item[Adresse] " + formatted_address)
-tex_print(r"    \item[Webseite] \href{" + overview['OfficialSite'] + r"}{(link)}")
-tex_print(r"    \item[Börse] " + overview['Exchange'])
-tex_print(r"    \item[Dividendendatum] " + str(overview['DividendDate']))
+tex_print(r"    \item[Address] " + formatted_address)
+tex_print(r"    \item[Website] \href{" + overview['OfficialSite'] + r"}{(link)}")
+tex_print(r"    \item[Exchange] " + overview['Exchange'])
+tex_print(r"    \item[Dividend Date] " + str(overview['DividendDate']))
 tex_print(r"\end{description}")
 tex_print(r"\end{minipage}")
-
-# ------------------- Unternehmenüberblick (Gemini) -------------------
-tex_print(r"\section*{Unternehmenüberblick}")
-company_overview_prompt = f"""
+tex_print(r"\vspace{0.5cm}")
+# ------------------- Company Overview (Gemini) -------------------
+tex_print(r"\section*{Company Overview}")
+overview_prompt = f"""
 Die Ford Motor Company (FMC) ist ein global tätiges Unternehmen, mit den
 Kerngeschäftsbereichen Automobile und Finanzdienstleistungen. Das
 Automobilsegment beinhaltet folgende Kernaufgaben: Design, Entwicklung,
@@ -315,15 +331,16 @@ z.B. GM bis jetzt diesen Wünschen nur unzureichend nachgekommen ist. Weitere
 Risikobereiche für Ford sind steigende Rohstoffpreise, härterer Preiswettbewerb
 und Wechselkursschwankungen.
 
-Please generate such a report for JPM. You have freedom what news choose but they should be new not old data.
-Do not give me anything extra in the message on the points of the report, you found online.
-And do not give anything extra in the message just the report. Keep it the same length.
+Write a company overview like this in English for {TICKER}.
+Include: main business segments, key markets, recent strategic initiatives, and competitive positioning.
+Keep the length similar to the original example (about 500 words).
+Do not add any extra commentary or meta-instructions.
 """
-company_text = query_gemini(company_overview_prompt)
-tex_print(company_text.replace('\n', ' '))
+overview_text = query_gemini(overview_prompt)
+tex_print(latex_escape(overview_text).replace('\n', '\\\\'))
 tex_print(r"\newpage")
 
-# ------------------- Nettogewinn (horizontal bar chart) -------------------
+# ------------------- Net Income (horizontal bar chart) -------------------
 start_date = '2015-01-01'
 filtered = earnings[earnings['fiscalDateEnding'] >= start_date].copy()
 fig, ax = plt.subplots(figsize=(10, 6))
@@ -344,28 +361,7 @@ tex_print(r"\end{minipage}")
 tex_print(r"\hfill")
 tex_print(r"\begin{minipage}{0.53\linewidth}")
 
-def latex_escape(s):
-    if not isinstance(s, str):
-        s = str(s)
-    replacements = {
-        '\\': r'\textbackslash{}',
-        '&': r'\&',
-        '%': r'\%',
-        '$': r'\$',
-        '#': r'\#',
-        '_': r'\_',
-        '{': r'\{',
-        '}': r'\}',
-        '~': r'\textasciitilde{}',
-        '^': r'\textasciicircum{}',
-        '<': r'\textless{}',
-        '>': r'\textgreater{}',
-    }
-    for char, escaped in replacements.items():
-        s = s.replace(char, escaped)
-    return s
-
-tex_print(r"\subsubsection*{Kennzahlen}")
+tex_print(r"\subsubsection*{Key Figures}")
 kz = (LatexTable(key_figures(fundamental_stock, n=4).to_latex(float_format="%.2f"))
       .remove_separators()
       .set_small_font(size=r'\small')
@@ -374,7 +370,7 @@ kz = (LatexTable(key_figures(fundamental_stock, n=4).to_latex(float_format="%.2f
 tex_print(kz)
 
 tex_print(r"\vspace{0.2cm}")
-tex_print(r"\subsubsection*{Schlüsselwachstumsraten}")
+tex_print(r"\subsubsection*{Key Growth Rates}")
 kz2 = (LatexTable(key_growth_rates(fundamental_stock).to_latex(float_format="%.2f"))
        .remove_separators()
        .set_small_font(size=r'\small')
@@ -384,8 +380,8 @@ tex_print(kz2)
 tex_print(r"\end{minipage}")
 tex_print(r"\vspace{0.5cm}")
 
-# ------------------- Finanzzahlen -------------------
-tex_print(r"\section*{Finanzzahlen}")
+# ------------------- Financial Figures -------------------
+tex_print(r"\section*{Financial Figures}")
 tex_print(r"\subsubsection*{Per share values}")
 ps = (LatexTable(per_share_values(fundamental_stock).to_latex(float_format="%.02f"))
       .remove_separators()
@@ -394,21 +390,21 @@ ps = (LatexTable(per_share_values(fundamental_stock).to_latex(float_format="%.02
       .fit_to_width())
 tex_print(ps)
 
-tex_print(r"\subsubsection*{Income statement overview}")
+tex_print(r"\subsubsection*{Income statement overview (USD)}")
 inc = (LatexTable(income_statement_overview(fundamental_stock).to_latex(header=False, float_format="%.f"))
        .remove_separators()
        .set_small_font()
        .fit_to_width())          # no bold_headers because header=False
 tex_print(inc)
 
-tex_print(r"\subsubsection*{Balance sheet overview}")
+tex_print(r"\subsubsection*{Balance sheet overview (USD)}")
 bal = (LatexTable(balance_sheet_overview(fundamental_stock).to_latex(header=False, float_format="%.f"))
        .remove_separators()
        .set_small_font()
        .fit_to_width())
 tex_print(bal)
 
-tex_print(r"\subsubsection*{Cashflow overview}")
+tex_print(r"\subsubsection*{Cashflow overview (USD}")
 cf = (LatexTable(cashflow_overview(fundamental_stock).to_latex(header=False, float_format="%.f"))
       .remove_separators()
       .set_small_font()
@@ -416,10 +412,10 @@ cf = (LatexTable(cashflow_overview(fundamental_stock).to_latex(header=False, flo
 tex_print(cf)
 tex_print(r"\newpage")
 
-# ------------------- Ausblick Industrie & SWOT (two columns) -------------------
+# ------------------- Industry Outlook & SWOT (two columns) -------------------
 tex_print(r"\noindent")
 tex_print(r"\begin{minipage}[t]{0.48\textwidth}")
-tex_print(r"\section*{Ausblick Industrie}")
+tex_print(r"\section*{Industry Outlook}")
 industry_prompt = f"""
 Die Ford Motor Company (FMC) ist ein global tätiges Unternehmen, mit den
 Kerngeschäftsbereichen Automobile und Finanzdienstleistungen. Das
@@ -463,18 +459,20 @@ z.B. GM bis jetzt diesen Wünschen nur unzureichend nachgekommen ist. Weitere
 Risikobereiche für Ford sind steigende Rohstoffpreise, härterer Preiswettbewerb
 und Wechselkursschwankungen.
 
-Please generate such a report for JPM and its industry. You have freedom what infos to choose but they should be new not old data.
-Do not give me anything extra in the message on the points of the report, you found online.
-And do not give anything extra in the message just the report. Keep it the same length.
+Write a brief industry outlook for the sector for {TICKER} and in english.
+Highlight current trends, challenges, and opportunities. Keep the length similar to the original example
+(approx. 280 words).
+Do not add any extra commentary or meta-instructions. And do not add extra formatting escept for breaks.
 """
 industry_text = query_gemini(industry_prompt)
-tex_print(latex_escape(industry_text).replace('\n', ' '))
+tex_print(latex_escape(industry_text).replace('\n', '\\\\'))
 tex_print(r"\end{minipage}")
 tex_print(r"\hfill")
 tex_print(r"\begin{minipage}[t]{0.48\textwidth}")
 tex_print(r"\section*{SWOT Analysis}")
 swot_prompt = f"""
-TRENGHTS. Ford ist einer der größten Autohersteller der
+Provide a SWOT analysis for {company_name} ({TICKER}) in the following format:
+STRENGHTS. Ford ist einer der größten Autohersteller der
 Welt und weist ein Portfolio mehrerer Marken auf. Fords R&D
 Abteilung konzentriert Ressourcen derzeit auf die
 Verbesserung von Performance und Sicherheit, der
@@ -493,14 +491,14 @@ konnten ihre US Marktanteile ausbauen. Weitere Risiken:
 steigende Kosten für Rohmaterialien, stärkerer
 Preiswettbewerb und ungünstige Wechselkursfluktuationen.
 
-Please generate such a SWOT analysis for JPM. You have freedom what infos to choose but they should be new not old data.
-Do not give me anything extra in the message on the points of the report, you found online.
-And do not give anything extra in the message just the report. Keep it the same length.
+Write such a SWOT analysis for {TICKER} and in enlish.
+Keep the length similar to the example (aprrox. 85 words). 
+Do not add any extra commentary or meta-instructions
 """
 swot_text = query_gemini(swot_prompt)
-tex_print(latex_escape(swot_text).replace('\n', ' '))
+tex_print(latex_escape(swot_text).replace('\n', '\\\\'))
 
-# ------------------- Aktienperformance (normalized) -------------------
+# ------------------- Stock Performance (normalized) -------------------
 stock['normalized'] = (stock['close'] / stock['close'].iloc[0] * 100) - 100
 spy['normalized'] = (spy['close'] / spy['close'].iloc[0] * 100) - 100
 if not competitor_stock.empty:
@@ -509,12 +507,12 @@ if not competitor_stock.empty:
 fig, ax1 = plt.subplots()
 ax1.plot(stock['fiscalDateEnding'], stock['normalized'], color='#0000FF', linewidth=1, label=TICKER)
 ax1.plot(spy['fiscalDateEnding'], spy['normalized'], color='#ff7f0e', linewidth=1, label=BENCHMARK)
-if not competitor_stock.empty:
+if not competitor_stock.empty and overview_data_list:
     ax1.plot(competitor_stock['fiscalDateEnding'], competitor_stock['normalized'], color='#2ca02c', linewidth=1, label=overview_data_list[0]['Symbol'])
 ax1.set_ylabel('Relative Performance (%)', fontsize=11)
 title = f'5 year performance: {TICKER} vs. {BENCHMARK}'
-if not competitor_stock.empty:
-    title += f' vs. {overview_data_list[0]['Symbol']}'
+if not competitor_stock.empty and overview_data_list:
+    title += f' vs. {overview_data_list[0]["Symbol"]}'
 ax1.set_title(title, fontsize=14, fontweight='bold')
 ax1.grid(True, linestyle='--', alpha=0.6)
 ax1.legend(loc='upper left')
@@ -524,12 +522,12 @@ perf_pdf = f"{TICKER.lower()}_performance.pdf"
 plt.savefig(perf_pdf, bbox_inches='tight')
 plt.close()
 
-tex_print(r"\section*{Aktienperformance}")
+tex_print(r"\section*{Stock Performance}")
 tex_print(r"\centering")
 tex_print(f"\\includegraphics[width=\\linewidth]{{{perf_pdf}}}")
 tex_print(r"\end{minipage}")
 
-# ------------------- Industrie (competitor table) -------------------
+# ------------------- Industry (competitor table) -------------------
 def format_market_cap(value_str):
     try:
         val = float(value_str)
@@ -559,7 +557,7 @@ for item in overview_data_list:
     dividend = format_number(item.get('DividendPerShare'), decimals=2)
     rows.append([stock_name, symbol, mkt_cap, recent_price, pe_ratio, beta, eps, dividend])
 
-tex_print(r"\section*{Industrie}")
+tex_print(r"\section*{Industry}")
 tex_print(r"\setlength{\LTleft}{0pt}")
 tex_print(r"\setlength{\LTright}{0pt}")
 tex_print(r"\begin{longtable}{@{\extracolsep{\fill}} l l r r r r r r @{}}")
@@ -572,8 +570,8 @@ tex_print(r"\bottomrule")
 tex_print(r"\end{longtable}")
 tex_print(r"\newpage")
 
-# ------------------- Unternehmens News -------------------
-tex_print(r"\section*{Unternehmens News}")
+# ------------------- Company News -------------------
+tex_print(r"\section*{Company News}")
 tex_print(r"\begin{multicols}{2}")
 latest_news = get_latest_news(TICKER, api_key=os.getenv("FINNHUB_API_KEY"), limit=7)
 for i, news in enumerate(latest_news, 1):
@@ -591,11 +589,11 @@ tex_print(r"\end{multicols}")
 
 # ------------------- Disclosure -------------------
 tex_print(r"\section*{Disclosure}")
-tex_print("The fundamental data and overview data is pulled from alphavantage and the stock data is from yfinance. "
-          "Such a report can be generated for any SP 500 company can be automatically generated under ... "
-          "The github repo, all calculations and how the report is generated can be found here: "
-          "\\url{https://github.com/TiborB6/report} "
-          "For this report the datapoints are automatically calculated, but the texts from gemini are corrected. "
+tex_print("The fundamental data and overview data is pulled from alphavantage and the stock data is from yfinance. \\\\"
+          "Such a report can be generated for any S&P 500 company automatically under \\\\"
+          "The GitHub repo, all calculations and how the report is generated can be found here: \\\\"
+          "\\url{https://github.com/TiborB6/report} \\\\"
+          "For this report the datapoints are automatically calculated, but the texts from gemini are corrected. \\\\"
           "The buying decision is based on the DDM model compared to the risk free rate.")
 
 tex_print(r"\end{document}")
@@ -612,4 +610,5 @@ for i in range(2):
         text=True
     )
 
-cleanup()
+if clean:
+    cleanup()

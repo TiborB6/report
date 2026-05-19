@@ -3,7 +3,7 @@ from google.genai import types
 
 def query_gemini(
     prompt: str,
-    model_name: str = "gemini-2.0-flash",
+    model_name: str = "gemini-2.5-pro",
     enable_web_search: bool = True
 ) -> str:
     """

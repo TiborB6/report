@@ -111,3 +111,24 @@ def format_address(address: str) -> str:
 
     # Join back with comma + space
     return ', '.join(parts)
+
+def latex_escape(s):
+    if not isinstance(s, str):
+        s = str(s)
+    replacements = {
+        '\\': r'\textbackslash{}',
+        '&': r'\&',
+        '%': r'\%',
+        '$': r'\$',
+        '#': r'\#',
+        '_': r'\_',
+        '{': r'\{',
+        '}': r'\}',
+        '~': r'\textasciitilde{}',
+        '^': r'\textasciicircum{}',
+        '<': r'\textless{}',
+        '>': r'\textgreater{}',
+    }
+    for char, escaped in replacements.items():
+        s = s.replace(char, escaped)
+    return s

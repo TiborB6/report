@@ -15,13 +15,13 @@ def generate_report():
         return "Missing ticker", 400
     
     result = subprocess.run(
-        ["python", "generate_report.py", ticker],
+        ["python", "generate_report.py", "-c",  ticker],
         capture_output=True, text=True
     )
     if result.returncode != 0:
         return f"Report generation failed: {result.stderr}", 500
     
-    report_path = "report.html"
+    report_path = "report.pdf"
     if not os.path.exists(report_path):
         return "Report file not found", 500
     return send_file(report_path)
