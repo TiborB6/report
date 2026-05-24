@@ -15,22 +15,27 @@
                         <h2 class="h4 mb-0">Stock Report Generator</h2>
                     </div>
                     <div class="card-body">
-                        <p>
-                            The stock report generator creates an analyst report based on the ticker symbol provided. <br>
-                            The generation should take between 3-5 min. Once it is finished the download begins automatically, else you will get an error message. <br>
-                            It is best used for stocks with dividends as a DDM model is used to calculate the value of the company. <br>
-                            The fundamental and overview data is from alphavantage and the stock data is from yfinance. <br>
-                            The website is only for demo purposes, no uptime is guaranteed and the API calls on the backend are limited.
-                        </p>
                         <form action="/generate_report" method="post">
                             <div class="mb-3">
                                 <label for="ticker" class="form-label">Ticker Symbol</label>
-                                <input type="text" class="form-control" id="ticker" name="ticker" 
+                                <input type="text" class="form-control" id="ticker" name="ticker"
                                        placeholder="e.g., AAPL, TSLA, MSFT" required>
                                 <div class="form-text">Enter a valid stock ticker symbol.</div>
+                                                <label for="format" class="form-label">Output Format</label>
+                                <select class="form-select" id="format" name="format" required>
+                                    <option value="pdf">PDF Document</option>
+                                    <option value="tex">LaTeX Source (.tex)</option>
+                                </select>
                             </div>
                             <button type="submit" class="btn btn-primary w-100">Generate Report</button>
                         </form>
+                        <ul>
+                          <li>Generates analyst report from a ticker symbol.</li>
+                          <li>The generation takes about 3-5min, download starts automatically or the error.</li>
+                          <li>Best for dividend stocks as a DDM model is used.</li>
+                          <li>Data sources: Alphavantage for fundamental, Yahoo Finance for Stock price and Finnbub for the News.</li>
+                          <li>This is only a demo and the backend is API limited.</li>
+                        </ul>
                     </div>
                 </div>
             </div>

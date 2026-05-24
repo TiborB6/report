@@ -132,7 +132,7 @@ def cleanup(directory_path="."):
         # Determine if the file should be removed
         should_remove = False
 
-        if filename.endswith((".json", ".tex", ".log", ".aux")):
+        if filename.endswith((".json", ".log", ".aux")):
             should_remove = True
         elif filename.endswith(".pdf") and filename != "report.pdf":
             should_remove = True

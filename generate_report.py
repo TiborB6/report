@@ -1,9 +1,8 @@
-import sys
 import pandas as pd
 from dotenv import load_dotenv
 import os
 from utils.fetch_data import fetch_financial_data_yfinance, fetch_financial_data, cleanup, fetch_and_save_single_endpoint
-from utils.fin.ddm import get_ddm_valuation, get_ddm_table
+from utils.fin.ddm import get_ddm_valuation
 from utils.load_data import load_stock_data, load_fundamental_data, load_overview_data
 from utils.fin.key_metrics import calculate_financial_metrics
 import matplotlib.pyplot as plt
@@ -16,7 +15,6 @@ import subprocess
 import time
 from utils.latex import LatexTable, format_address, latex_escape
 import argparse
-
 
 load_dotenv(".env")
 
@@ -90,7 +88,16 @@ stock_sorted = stock.sort_values('fiscalDateEnding')
 fundamental_sorted = fundamental.sort_values('fiscalDateEnding')
 fundamental_stock = pd.merge_asof(fundamental_sorted, stock_sorted, on='fiscalDateEnding', direction='backward')
 
-ddm = get_ddm_valuation(TICKER)
+ddm = get_ddm_valuation(fundamental, overview)
+forward_target = ddm.iloc[1]['Target Price per Share']
+curr_price = stock.iloc[-1]['close']
+
+if curr_price * 1.10 < forward_target:
+    evaluation = "BUY"
+elif curr_price * 0.90 > forward_target:
+    evaluation = "SELL"
+else:
+    evaluation = "HOLD"
 
 # ------------------- Helper: write LaTeX to file -------------------
 tex_lines = []
@@ -117,6 +124,8 @@ tex_print(r"\usepackage{booktabs}")
 tex_print(r"\usepackage{enumitem}")
 tex_print(r"\usepackage{longtable}")
 tex_print(r"\usepackage{parskip}")
+tex_print(r"\usepackage{wrapfig}")
+tex_print(r"\usepackage{tabularx}")
 tex_print(r"\usepackage{url}")
 tex_print(r"\usepackage{xcolor}")
 tex_print(r"\usepackage{multicol}")
@@ -142,14 +151,13 @@ tex_print(r"\end{minipage}")
 tex_print(r"\vspace{0.5cm}")
 tex_print(r"\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}} l l l l @{}}")
 tex_print(r"\textbf{Recommendation} & \textbf{Price} & \textbf{12-Month Target Price} & \textbf{Investment Style} \\")
-tex_print(f"{ddm['evaluation']} & \\${stock.iloc[-1]['close']:.2f} & \\${ddm['target_price']:.2f} & {overview['AssetType']} \\\\")
+tex_print(f"{evaluation} & \\${stock.iloc[-1]['close']:.2f} & \\${forward_target} & {overview['AssetType']} \\\\")
 tex_print(r"\end{tabular*}")
 tex_print(fr"{overview['Description']}")
 
 # ------------------- Key Metrics -------------------
 tex_print(r"\section*{Key Metrics}")
-metrics_dict = calculate_financial_metrics(stock, fundamental_stock)
-metrics_dict['Beta'] = overview['Beta']
+metrics_dict = calculate_financial_metrics(stock, fundamental_stock, overview)
 items = list(metrics_dict.items())
 n = len(items)
 col_size = (n + 2) // 3
@@ -228,7 +236,7 @@ sank allein im 4. Quartal 2007 um 0.7 Prozentpunkte auf
 
 Write company highlights like this in English for {TICKER}.
 Use recent data (not older than 3 months). Format each bullet point with "▫" at the beginning.
-Keep the total length similar to the example below (approx. 75 words).
+Please keep it shorter the n the original about approx. 70 words.
 Do not add any extra commentary or meta-instructions – only output the bullet points.
 """
 highlights_text = query_gemini(highlights_prompt)
@@ -256,7 +264,7 @@ Based on this the risk assesment is: HIGH.
 
 Write a risk assesment like this in English for {TICKER}.
 Include 2-3 key risks and conclude with a risk level: LOW, MEDIUM, or HIGH.
-Keep the text length similar to the example (approx. 75 words).
+Keep the text length similar to the example (approx 70).
 Do not add any extra commentary or meta-instructions
 """
 risk_text = query_gemini(risk_prompt)
@@ -265,27 +273,10 @@ tex_print(r"\end{minipage}")
 tex_print(r"\newpage")
 
 # ------------------- DDM -------------------
-tex_print(r"\begin{minipage}[t]{0.60\textwidth}")
 tex_print(r"\section*{Dividend Discount Model}")
-ddm_table, terminal_value = get_ddm_table(TICKER, forecast_years=3)
-tex_print(LatexTable(ddm_table.to_latex()).fit_to_width())
-tex_print(r"\vspace{0.2cm}")
-tex_print(f"\\textbf{{Terminal Value}}: {terminal_value:.2f}\\\\")
-tex_print(r"\end{minipage}")
-tex_print(r"\hfill")
-
-# ------------------- Company Information -------------------
-tex_print(r"\begin{minipage}[t]{0.44\textwidth}")
-tex_print(r"\section*{Company Information}")
-formatted_address = format_address(overview['Address'])
-tex_print(r"\begin{description}")
-tex_print(r"    \item[Address] " + formatted_address)
-tex_print(r"    \item[Website] \href{" + overview['OfficialSite'] + r"}{(link)}")
-tex_print(r"    \item[Exchange] " + overview['Exchange'])
-tex_print(r"    \item[Dividend Date] " + str(overview['DividendDate']))
-tex_print(r"\end{description}")
-tex_print(r"\end{minipage}")
+tex_print(LatexTable(ddm.set_index("Year").T.to_latex(float_format="%.2f")).fit_to_width())
 tex_print(r"\vspace{0.5cm}")
+
 # ------------------- Company Overview (Gemini) -------------------
 tex_print(r"\section*{Company Overview}")
 overview_prompt = f"""
@@ -333,11 +324,21 @@ und Wechselkursschwankungen.
 
 Write a company overview like this in English for {TICKER}.
 Include: main business segments, key markets, recent strategic initiatives, and competitive positioning.
-Keep the length similar to the original example (about 500 words).
+Keep the length similar to the original example.
 Do not add any extra commentary or meta-instructions.
+Do not use headers just flow text.
 """
 overview_text = query_gemini(overview_prompt)
 tex_print(latex_escape(overview_text).replace('\n', '\\\\'))
+tex_print(r"\vspace{0.5cm}")
+
+formatted_address = format_address(overview['Address'])
+tex_print(r"\begin{description}")
+tex_print(r"    \item[Address:] " + formatted_address)
+tex_print(r"    \item[Website:] \url{" + overview['OfficialSite'] + "}")
+tex_print(r"    \item[Exchange:] " + overview['Exchange'])
+tex_print(r"    \item[Dividend Date:] " + str(overview['DividendDate']))
+tex_print(r"\end{description}")
 tex_print(r"\newpage")
 
 # ------------------- Net Income (horizontal bar chart) -------------------
@@ -371,7 +372,7 @@ tex_print(kz)
 
 tex_print(r"\vspace{0.2cm}")
 tex_print(r"\subsubsection*{Key Growth Rates}")
-kz2 = (LatexTable(key_growth_rates(fundamental_stock).to_latex(float_format="%.2f"))
+kz2 = (LatexTable(key_growth_rates(fundamental_stock).rename(columns={'PE_Ratio':'PE ratio'}).to_latex(float_format="%.2f"))
        .remove_separators()
        .set_small_font(size=r'\small')
        .bold_headers()
@@ -387,28 +388,28 @@ ps = (LatexTable(per_share_values(fundamental_stock).to_latex(float_format="%.02
       .remove_separators()
       .set_small_font()
       .bold_headers()
-      .fit_to_width())
+      .set_equal_column_widths(align="r", stretch_first=True))
 tex_print(ps)
 
 tex_print(r"\subsubsection*{Income statement overview (USD)}")
 inc = (LatexTable(income_statement_overview(fundamental_stock).to_latex(header=False, float_format="%.f"))
        .remove_separators()
        .set_small_font()
-       .fit_to_width())          # no bold_headers because header=False
+       .set_equal_column_widths(align="r", stretch_first=True))
 tex_print(inc)
 
 tex_print(r"\subsubsection*{Balance sheet overview (USD)}")
 bal = (LatexTable(balance_sheet_overview(fundamental_stock).to_latex(header=False, float_format="%.f"))
        .remove_separators()
        .set_small_font()
-       .fit_to_width())
+       .set_equal_column_widths(align="r", stretch_first=True))
 tex_print(bal)
 
 tex_print(r"\subsubsection*{Cashflow overview (USD}")
 cf = (LatexTable(cashflow_overview(fundamental_stock).to_latex(header=False, float_format="%.f"))
       .remove_separators()
       .set_small_font()
-      .fit_to_width())
+      .set_equal_column_widths(align="r", stretch_first=True))
 tex_print(cf)
 tex_print(r"\newpage")
 
@@ -460,8 +461,8 @@ Risikobereiche für Ford sind steigende Rohstoffpreise, härterer Preiswettbewer
 und Wechselkursschwankungen.
 
 Write a brief industry outlook for the sector for {TICKER} and in english.
-Highlight current trends, challenges, and opportunities. Keep the length similar to the original example
-(approx. 280 words).
+Highlight current trends, challenges, and opportunities. Keep the length similar to the original example.
+Keep it around 300 words.
 Do not add any extra commentary or meta-instructions. And do not add extra formatting escept for breaks.
 """
 industry_text = query_gemini(industry_prompt)
@@ -492,11 +493,12 @@ steigende Kosten für Rohmaterialien, stärkerer
 Preiswettbewerb und ungünstige Wechselkursfluktuationen.
 
 Write such a SWOT analysis for {TICKER} and in enlish.
-Keep the length similar to the example (aprrox. 85 words). 
+Keep the length shorter then the original baout 100 words.
 Do not add any extra commentary or meta-instructions
 """
 swot_text = query_gemini(swot_prompt)
 tex_print(latex_escape(swot_text).replace('\n', '\\\\'))
+tex_print(r"\vspace{0.5cm}")
 
 # ------------------- Stock Performance (normalized) -------------------
 stock['normalized'] = (stock['close'] / stock['close'].iloc[0] * 100) - 100
@@ -589,17 +591,18 @@ tex_print(r"\end{multicols}")
 
 # ------------------- Disclosure -------------------
 tex_print(r"\section*{Disclosure}")
-tex_print("The fundamental data and overview data is pulled from alphavantage and the stock data is from yfinance. \\\\"
-          "Such a report can be generated for any S&P 500 company automatically under \\\\"
-          "The GitHub repo, all calculations and how the report is generated can be found here: \\\\"
-          "\\url{https://github.com/TiborB6/report} \\\\"
-          "For this report the datapoints are automatically calculated, but the texts from gemini are corrected. \\\\"
-          "The buying decision is based on the DDM model compared to the risk free rate.")
-
+tex_print(r"\begin{enumerate}")
+tex_print(r"    \item The fundamental data and overview data is pulled from alphavantage, the stock data is from yfinance and the news is from finnhub.")
+tex_print(r"    \item The buying decision is based on the DDM model, which takes an ARIMA(1,1,0) model on EPS and assumes the median payout rate of the last 5 years.\\ "
+          r"            This is manually compared with company guidance. \\"
+          r"            There are better methods to estimate a dividend guidance and a fair value, but given the project size this was the most reasonable.")
+tex_print(r"    \item Such a report can be generated for any S\&P 500 company automatically under ")
+tex_print(r"    \item All calculations and how the report is generated can be found here: \url{https://github.com/TiborB6/report}")
+tex_print(r"\end{enumerate}")
 tex_print(r"\end{document}")
 
 # ------------------- Write and compile .tex -------------------
-tex_filename = f"report.tex"
+tex_filename = "report.tex"
 with open(tex_filename, "w", encoding="utf-8") as f:
     f.write(''.join(tex_lines))
 

@@ -92,6 +92,51 @@ class LatexTable:
         self._latex = s
         return self
 
+    def set_equal_column_widths(self, align='c', extra_padding=2, stretch_first=False, other_width='2cm'):
+        r"""Set all columns to equal width (or stretch first column) using full \linewidth.
+
+        If stretch_first=False (default): all columns get equal static width.
+        If stretch_first=True: first column becomes X (stretches), others use 'align'.
+        """
+        lines = self._latex.split('\n')
+        in_tabular = False
+        first_data_row = None
+        for line in lines:
+            if '\\begin{tabular' in line:
+                in_tabular = True
+                continue
+            if in_tabular and line.strip() and not line.strip().startswith('%'):
+                if '&' in line:
+                    first_data_row = line
+                    break
+        if first_data_row is None:
+            return self
+
+        num_cols = first_data_row.count('&') + 1
+        if num_cols == 0:
+            return self
+
+        if stretch_first and num_cols > 1:
+            # Build column spec: X for first column, then (num_cols-1) times p{...} with equal width
+            col_spec = 'X' + f'p{{{other_width}}}' * (num_cols - 1)
+
+            pattern = r'(\\begin\{tabular\*?\})(?:\[[^\]]*\])?(\{[^}]+\})'
+            # Use a lambda to avoid backslash escape processing in the replacement
+            self._latex = re.sub(pattern,
+                                 lambda m: '\\begin{tabularx}{\\linewidth}{' + col_spec + '}',
+                                 self._latex, count=1)
+            # Change the closing environment
+            self._latex = self._latex.replace('\\end{tabular}', '\\end{tabularx}', 1)
+        else:
+            # Original equal-width behaviour (works without extra packages)
+            col_width = f'\\dimexpr \\linewidth/{num_cols} - 2\\tabcolsep\\relax'
+            new_col_spec = '@{}' + f'p{{{col_width}}}' * num_cols + '@{}'
+            pattern = r'(\\begin\{tabular\*?\})(?:\[[^\]]*\])?(\{[^}]+\})'
+            self._latex = re.sub(pattern,
+                                 lambda m: m.group(1) + '{' + new_col_spec + '}',
+                                 self._latex, count=1)
+        return self
+
 def format_address(address: str) -> str:
     """
     Convert an address string to a clean, properly capitalized format.

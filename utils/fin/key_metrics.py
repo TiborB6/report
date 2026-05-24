@@ -1,6 +1,6 @@
 import pandas as pd
 
-def calculate_financial_metrics(stock_df, fundamental_df):
+def calculate_financial_metrics(stock_df, fundamental_df, overview_df):
     """
     Compute key metrics from stock and fundamental data.
     Returns a dictionary of metric names and formatted values.
@@ -16,7 +16,7 @@ def calculate_financial_metrics(stock_df, fundamental_df):
     # 1. 2-Week Price Range (high - low over last 14 trading days)
     two_weeks = stock_sorted.tail(14)
     price_range = two_weeks['high'].max() - two_weeks['low'].min()
-    price_range_str = f"${price_range:.2f}"
+    price_range_str = f"{price_range:.2f}"
 
     # 2. Shares Outstanding (B) – shares outstanding in billions
     if latest_fund is not None and 'commonStockSharesOutstanding' in latest_fund:
@@ -40,14 +40,14 @@ def calculate_financial_metrics(stock_df, fundamental_df):
     if not past_prices.empty:
         past_price = past_prices.iloc[-1]['close']
         value_today = 10000 * (today_price / past_price)
-        invest_str = f"${value_today:,.2f}"
+        invest_str = f"{value_today:,.2f}"
     else:
         invest_str = "N/A"
 
     # 5. Market Cap (B) – market cap in billions
     if latest_fund is not None and 'commonStockSharesOutstanding' in latest_fund:
         market_cap = (latest_stock['close'] * latest_fund['commonStockSharesOutstanding']) / 1e9
-        market_cap_str = f"$ {market_cap:.2f}"
+        market_cap_str = f"{market_cap:.2f}"
     else:
         market_cap_str = "N/A"
 
@@ -74,10 +74,10 @@ def calculate_financial_metrics(stock_df, fundamental_df):
         "2-Week Price Range": price_range_str,
         "Shares Outstanding (B)": shares_str,
         "Dividend Per Share": div_per_share_str,
-        "$10K Invested 5 Years Ago": invest_str,
+        "10K Invested 5 Years Ago": invest_str,
         "Market Cap (B)": market_cap_str,
-        "Dividend Yield": div_yield_str,
+        "Dividend Yield": overview_df['DividendPerShare'],
         "Avg Daily Volume (M)": avg_volume_str,
-        "Beta": beta_str,
+        "Beta": overview_df['Beta'],
     }
     return metrics

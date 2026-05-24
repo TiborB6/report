@@ -11,6 +11,7 @@ def form():
 @app.route('/generate_report', methods=['POST'])
 def generate_report():
     ticker = request.form.get('ticker')
+    output = request.form.get('format')
     if not ticker:
         return "Missing ticker", 400
     
@@ -20,10 +21,10 @@ def generate_report():
     )
     if result.returncode != 0:
         return f"Report generation failed: {result.stderr}", 500
-    
-    report_path = "report.pdf"
+
+    report_path = "report." + str(output)
     if not os.path.exists(report_path):
-        return "Report file not found", 500
+        return "Report file not found" + report_path, 500
     return send_file(report_path)
 
 if __name__ == '__main__':
