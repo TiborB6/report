@@ -575,7 +575,7 @@ tex_print(r"\newpage")
 # ------------------- Company News -------------------
 tex_print(r"\section*{Company News}")
 tex_print(r"\begin{multicols}{2}")
-latest_news = get_latest_news(TICKER, api_key=os.getenv("FINNHUB_API_KEY"), limit=7)
+latest_news = get_latest_news(TICKER, api_key=os.getenv("FINNHUB_API_KEY"), limit=10)
 for i, news in enumerate(latest_news, 1):
     headline = latex_escape(news['headline'])
     date = latex_escape(news['date'])
@@ -596,7 +596,6 @@ tex_print(r"    \item The fundamental data and overview data is pulled from alph
 tex_print(r"    \item The buying decision is based on the DDM model, which takes an ARIMA(1,1,0) model on EPS and assumes the median payout rate of the last 5 years.\\ "
           r"            This is manually compared with company guidance. \\"
           r"            There are better methods to estimate a dividend guidance and a fair value, but given the project size this was the most reasonable.")
-tex_print(r"    \item Such a report can be generated for any S\&P 500 company automatically under ")
 tex_print(r"    \item All calculations and how the report is generated can be found here: \url{https://github.com/TiborB6/report}")
 tex_print(r"\end{enumerate}")
 tex_print(r"\end{document}")

@@ -3,6 +3,11 @@
 This is a project to automatically create a analyst report based on data from alpha vantage and yahoo finance. This is only for a university project not a full scale report.
 The script is best used with S&P 500 companies and with dividend based stocks.
 
+# Demo version
+A small demo version can be found here: <br>
+[fein-app.com](https://fein-app.com)
+
+
 # Usage
 ```commandline
 python3 generate_report.py [-l] [-c] <TICKER>
@@ -29,7 +34,7 @@ touch .env
 
 Add your keys to .env
 ```commandline
-API_KEY = "YOU_ALPHAVANTAGE_KEY"
-GOOGLE_API_KEY = "YOUR_GOOGLE_AI_LAB_KEY"
+API_KEY="YOUR_ALPHAVANTAGE_KEY"
+GOOGLE_API_KEY ="YOUR_GOOGLE_AI_LAB_KEY"
 FINNHUB_API_KEY="YOUR_FINNHUB_KEY"
 ```
