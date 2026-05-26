@@ -18,14 +18,11 @@ def load_stock_data(stock_name, path=".", type="daily"):
     """
     file_path = os.path.join(path, f"{stock_name}_{type}.json")
 
-    # Read JSON as dictionary with date strings as keys
     with open(file_path, "r") as f:
         raw_data = json.load(f)
 
-    # Convert to DataFrame: orient='index' puts date strings as rows
     df = pd.DataFrame.from_dict(raw_data, orient='index')
 
-    # Rename columns to lowercase (optional, but matches your expected output)
     df.rename(columns={
         'Open': 'open',
         'High': 'high',
@@ -34,15 +31,12 @@ def load_stock_data(stock_name, path=".", type="daily"):
         'Volume': 'volume'
     }, inplace=True)
 
-    # Keep only the columns we need (ignore Dividends, Stock Splits)
     df = df[['open', 'high', 'low', 'close', 'volume']]
 
-    # Ensure correct data types
     for col in ['open', 'high', 'low', 'close']:
         df[col] = df[col].astype(float)
     df['volume'] = df['volume'].astype(int)
 
-    # Convert index to datetime and sort
     df.index = pd.to_datetime(df.index)
     df.sort_index(inplace=True)
 
@@ -76,7 +70,7 @@ def load_fundamental_data(symbol, path=".", type="balance"):
     for col in df.columns:
         if col == "reportedCurrency":
             continue
-        df[col] = pd.to_numeric(df[col], errors='coerce')   # <-- fixed
+        df[col] = pd.to_numeric(df[col], errors='coerce')
 
     return df
 
@@ -94,5 +88,5 @@ def load_overview_data(symbol, path=".", type="overview"):
     """
     file_path = os.path.join(path, f"{symbol}_{type}.json")
     with open(file_path, "r") as f:
-        data = json.load(f)   # data is a dict with keys like "Symbol", "Name", ...
+        data = json.load(f)
     return data

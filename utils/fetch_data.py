@@ -17,7 +17,6 @@ def fetch_and_save_single_endpoint(symbol, endpoint_name, endpoint_params, api_k
     Returns:
         str or None: File path if successful, else None.
     """
-    # Build URL
     url = (f"https://www.alphavantage.co/query"
            f"?function={endpoint_params['function']}"
            f"&symbol={symbol}&apikey={api_key}")
@@ -75,7 +74,6 @@ def fetch_financial_data(symbol, api_key='demo'):
         if filepath:
             saved_files.append(filepath)
 
-        # Sleep between calls (10 seconds) except after the last one
         if idx != len(endpoint_items) - 1:
             time.sleep(2)
 
@@ -97,15 +95,13 @@ def fetch_financial_data_yfinance(symbol, period='5y'):
     ticker = yf.Ticker(symbol)
     saved_files = []
 
-    # 1. Historical prices (daily)
     hist = ticker.history(period=period)
     if not hist.empty:
-        # Convert DataFrame to JSON (orient='index' keeps date as key)
         hist_json = hist.to_json(orient='index', date_format='iso')
         filename = f"{symbol}_daily.json"
         filepath = os.path.join(os.getcwd(), filename)
         with open(filepath, 'w') as f:
-            json.dump(json.loads(hist_json), f, indent=2)  # pretty print
+            json.dump(json.loads(hist_json), f, indent=2)
         saved_files.append(filepath)
         print(f"Saved: {filepath}")
     else:
@@ -129,7 +125,6 @@ def cleanup(directory_path="."):
     errors = 0
 
     for filename in os.listdir(directory_path):
-        # Determine if the file should be removed
         should_remove = False
 
         if filename.endswith((".json", ".log", ".aux")):

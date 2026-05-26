@@ -2,11 +2,7 @@
 
 This is a project to automatically create a analyst report based on data from alpha vantage and yahoo finance. This is only for a university project not a full scale report.
 The script is best used with S&P 500 companies and with dividend based stocks.
-
-# Demo version
-A small demo version can be found here: <br>
-[fein-app.com](https://fein-app.com)
-
+It generates both a pdf and latex source so it can be adjusted later.
 
 # Usage
 ```commandline
@@ -20,7 +16,7 @@ optional arguments: <br>
   -l set local no fresh data fetched <br>
   -c deletes local data
 
-output: report.pdf
+output: report.pdf, report.tex
 
 # Install
 1. Get repo

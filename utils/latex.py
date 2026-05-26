@@ -117,18 +117,14 @@ class LatexTable:
             return self
 
         if stretch_first and num_cols > 1:
-            # Build column spec: X for first column, then (num_cols-1) times p{...} with equal width
             col_spec = 'X' + f'p{{{other_width}}}' * (num_cols - 1)
 
             pattern = r'(\\begin\{tabular\*?\})(?:\[[^\]]*\])?(\{[^}]+\})'
-            # Use a lambda to avoid backslash escape processing in the replacement
             self._latex = re.sub(pattern,
                                  lambda m: '\\begin{tabularx}{\\linewidth}{' + col_spec + '}',
                                  self._latex, count=1)
-            # Change the closing environment
             self._latex = self._latex.replace('\\end{tabular}', '\\end{tabularx}', 1)
         else:
-            # Original equal-width behaviour (works without extra packages)
             col_width = f'\\dimexpr \\linewidth/{num_cols} - 2\\tabcolsep\\relax'
             new_col_spec = '@{}' + f'p{{{col_width}}}' * num_cols + '@{}'
             pattern = r'(\\begin\{tabular\*?\})(?:\[[^\]]*\])?(\{[^}]+\})'
@@ -145,16 +141,12 @@ def format_address(address: str) -> str:
         Input:  "270 PARK AVENUE, NEW YORK, NY, UNITED STATES, 10017"
         Output: "270 Park Avenue, New York, NY, United States, 10017"
     """
-    # Split by comma, strip whitespace, and capitalize each part
     parts = [part.strip().title() for part in address.split(',')]
 
-    # Special handling for US state abbreviations (keep them uppercase)
-    # e.g., "Ny" -> "NY", "Ca" -> "CA"
     for i, part in enumerate(parts):
         if len(part) == 2 and part.isalpha():
             parts[i] = part.upper()
 
-    # Join back with comma + space
     return ', '.join(parts)
 
 def latex_escape(s):

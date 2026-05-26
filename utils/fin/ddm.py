@@ -1,8 +1,5 @@
-import types
 import pandas as pd
 from statsmodels.tsa.arima.model import ARIMA
-from statsmodels.tsa.stattools import adfuller
-import numpy as np
 
 def estimate_dividend_structure(fundamental_df, overview_df, years=5):
     """
@@ -14,17 +11,14 @@ def estimate_dividend_structure(fundamental_df, overview_df, years=5):
     df['eps_q'] = df['netIncome_x'] / df['commonStockSharesOutstanding']
     df['year'] = df['fiscalDateEnding'].dt.year
 
-    # Aggregate to annual
     annual = df.groupby('year').agg({
         'eps_q': 'sum',
         'dividendPayoutCommonStock': 'sum',
         'commonStockSharesOutstanding': 'first'
     }).reset_index()
 
-    # Remove incomplete years (less than 4 quarters)
     quarter_counts = df.groupby('year').size()
     complete_years = quarter_counts[quarter_counts >= 4].index
-    removed = set(annual['year']) - set(complete_years)
     annual = annual[annual['year'].isin(complete_years)]
 
     annual['dps'] = annual['dividendPayoutCommonStock'] / annual['commonStockSharesOutstanding']
